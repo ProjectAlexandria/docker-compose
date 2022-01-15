@@ -2,9 +2,37 @@ version: '3.8'
 services:
   config-server:
     image: ghcr.io/projectalexandria/config-server:main
+    restart: unless-stopped
     volumes:
-      - "config:/config/" # not readonly, because new configs are automatically added.
-
-
+      - "config:/config" # not readonly, because new configs are automatically added.
+  db:
+    image: postgres:14.1
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - "db:/var/lib/postgresql/data"
+    ports: # TODO entfernen
+      - 5342:5432
+  filesystem-initiator:
+    image: ghcr.io/projectalexandria/filesystem-initiator:main
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8080
+      SPRING_PROFILES_ACTIVE: config-server
+    volumes:
+      - "alexandriadata:/alexandriadata"
+      - "C:/Users/info/git/projectAlexandria:/projects:ro"
+  maven-module-identification:
+    image: ghcr.io/projectalexandria/maven-module-identification:main
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8080
+      SPRING_PROFILES_ACTIVE: config-server
+    volumes:
+      - "alexandriadata:/alexandriadata"
+  
 volumes:
-  config: {}
+  config: {} # Configuration
+  db: {}
+  alexandriadata: {} # Shared storage for analyzing services
