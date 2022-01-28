@@ -1,5 +1,6 @@
 version: '3.8'
 services:
+  
   config-server:
     image: ghcr.io/projectalexandria/config-server:main
     restart: unless-stopped
@@ -14,6 +15,15 @@ services:
       - "db:/var/lib/postgresql/data"
     ports: # TODO entfernen
       - 5342:5432
+  workflow-engine:
+    image: ghcr.io/fabcelhaft/camunda-config-server-ready:main
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8080
+      SPRING_PROFILES_ACTIVE: config-server
+      JAVA_OPTS: -Xmx256m -XX:MaxMetaspaceSize=256m -XX:-UseContainerSupport
+    ports:
+      - 8042:8080
   filesystem-initiator:
     image: ghcr.io/projectalexandria/filesystem-initiator:main
     restart: unless-stopped
@@ -23,14 +33,46 @@ services:
     volumes:
       - "alexandriadata:/alexandriadata"
       - "C:/Users/info/git/projectAlexandria:/projects:ro"
-  maven-module-identification:
-    image: ghcr.io/projectalexandria/maven-module-identification:main
+    depends_on:
+      - config-server
+      - db
+      - workflow-engine
+  module-identification:
+    image: ghcr.io/projectalexandria/module-identification:main
     restart: unless-stopped
     environment:
       SPRING_CLOUD_CONFIG_URI: http://config-server:8080
       SPRING_PROFILES_ACTIVE: config-server
     volumes:
       - "alexandriadata:/alexandriadata"
+    depends_on:
+      - config-server
+      - workflow-engine
+  dockerfile-analyzer:
+    image: ghcr.io/projectalexandria/dockerfile-analyzer:main
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8080
+      SPRING_PROFILES_ACTIVE: config-server
+    volumes:
+      - "alexandriadata:/alexandriadata"
+    depends_on:
+      - config-server
+      - db
+      - workflow-engine
+  maven-analyzer:
+    image: ghcr.io/projectalexandria/maven-analyzer:main
+    restart: unless-stopped
+    replicas: 2
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8080
+      SPRING_PROFILES_ACTIVE: config-server
+    volumes:
+      - "alexandriadata:/alexandriadata"
+    depends_on:
+      - config-server
+      - db
+      - workflow-engine
   
 volumes:
   config: {} # Configuration
