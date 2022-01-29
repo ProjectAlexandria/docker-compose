@@ -1,11 +1,17 @@
 version: '3.8'
 services:
-  
-  config-server:
-    image: ghcr.io/projectalexandria/config-server:main
+  sftp:
+    image: lscr.io/linuxserver/openssh-server
     restart: unless-stopped
+    environment:
+      - PASSWORD_ACCESS=true
+      - SUDO_ACCESS=false
+      - USER_NAME=alexandria
+      - USER_PASSWORD=alexandria
     volumes:
-      - "config:/config" # not readonly, because new configs are automatically added.
+      - "alexandriadata:/alexandriadata"
+    ports:
+      - 2222:2222
   db:
     image: postgres:14.1
     restart: unless-stopped
@@ -15,6 +21,11 @@ services:
       - "db:/var/lib/postgresql/data"
     ports: # TODO entfernen
       - 5342:5432
+  config-server:
+    image: ghcr.io/projectalexandria/config-server:main
+    restart: unless-stopped
+    volumes:
+      - "config:/config" # not readonly, because new configs are automatically added.
   workflow-engine:
     image: ghcr.io/fabcelhaft/camunda-config-server-ready:main
     restart: unless-stopped
@@ -24,6 +35,9 @@ services:
       JAVA_OPTS: -Xmx256m -XX:MaxMetaspaceSize=256m -XX:-UseContainerSupport
     ports:
       - 8042:8080
+    depends_on:
+      - config-server
+      - db
   filesystem-initiator:
     image: ghcr.io/projectalexandria/filesystem-initiator:main
     restart: unless-stopped
@@ -63,7 +77,8 @@ services:
   maven-analyzer:
     image: ghcr.io/projectalexandria/maven-analyzer:main
     restart: unless-stopped
-    replicas: 2
+    deploy: 
+      replicas: 2
     environment:
       SPRING_CLOUD_CONFIG_URI: http://config-server:8080
       SPRING_PROFILES_ACTIVE: config-server
@@ -73,7 +88,29 @@ services:
       - config-server
       - db
       - workflow-engine
-  
+  maven-license-analyzer:
+    image: ghcr.io/projectalexandria/maven-license:main
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8080
+      SPRING_PROFILES_ACTIVE: config-server
+    depends_on:
+      - config-server
+      - db
+      - workflow-engine
+  cleanup:
+    image: ghcr.io/projectalexandria/cleanup:main
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8080
+      SPRING_PROFILES_ACTIVE: config-server
+    volumes:
+      - "alexandriadata:/alexandriadata"
+    depends_on:
+      - config-server
+      - db
+      - workflow-engine
+
 volumes:
   config: {} # Configuration
   db: {}
