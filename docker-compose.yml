@@ -1,5 +1,31 @@
 version: '3.8'
 services:
+  loadbalancer:
+    image: traefik:${TRAEFIK_VERSION}
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    labels:
+      - service=${TRAEFIK_INDENT}
+      - "traefik.enable=true"
+      - "traefik.http.routers.api.rule=PathPrefix(`/api`) || PathPrefix(`/dashboard`)"
+      - "traefik.http.routers.api.service=api@internal"
+      - "traefik.http.routers.api.entrypoints=web"
+    environment:
+      - TRAEFIK_API=true
+      - TRAEFIK_PILOT_DASHBOARD=false
+      - TRAEFIK_GLOBAL_CHECKNEWVERSION=false
+      - TRAEFIK_GLOBAL_SENDANONYMOUSUSAGE=false
+      - "TRAEFIK_PROVIDERS_DOCKER_CONSTRAINTS=Label(`service`, `${TRAEFIK_INDENT}`)"
+      - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
+      - TRAEFIK_ENTRYPOINTS_WEB_ADDRESS=:8080 # Entrypoints: aufsteigend sortiert
+      - TRAEFIK_ENTRYPOINTS_DB_ADDRESS=:5432
+      - TRAEFIK_ENTRYPOINTS_SFTP_ADDRESS=:2222
+    ports:
+      - ${HTTP_PORT}:8080
+      - ${POSTGRES_PORT}:5432
+      - ${SSH_PORT}:2222
+      #services einbinden, grafana hinzufügen
   sftp:
     image: lscr.io/linuxserver/openssh-server
     restart: unless-stopped
@@ -10,8 +36,13 @@ services:
       - USER_PASSWORD=alexandria
     volumes:
       - "alexandriadata:/alexandriadata"
-    ports:
-      - 2222:2222
+    labels:
+      - service=${TRAEFIK_INDENT}
+      - traefik.enable=true
+      - traefik.tcp.routers.sftp.rule=HostSNI(`*`)
+      - traefik.tcp.routers.sftp.entrypoints=sftp
+      - traefik.tcp.routers.sftp.service=sftp
+      - traefik.tcp.services.sftp.loadbalancer.server.port=2222
   db:
     image: postgres:14.1
     restart: unless-stopped
@@ -19,13 +50,25 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - "db:/var/lib/postgresql/data"
-    ports: # TODO entfernen
-      - 5342:5432
+    labels:
+      - service=${TRAEFIK_INDENT}
+      - traefik.enable=true
+      - traefik.tcp.routers.db.rule=HostSNI(`*`)
+      - traefik.tcp.routers.db.entrypoints=db
+      - traefik.tcp.routers.db.service=db
+      - traefik.tcp.services.db.loadbalancer.server.port=5432
   config-server:
     image: ghcr.io/projectalexandria/config-server:main
     restart: unless-stopped
     volumes:
       - "config:/config" # not readonly, because new configs are automatically added.
+    labels:
+      - service=${TRAEFIK_INDENT}
+      - traefik.enable=true
+      - traefik.http.routers.config-server.rule=PathPrefix(`/config-server`)
+      - traefik.http.routers.config-server.entrypoints=web
+      - traefik.http.routers.config-server.middlewares=config-server-stripprefix
+      - traefik.http.middlewares.config-server-stripprefix.stripprefix.prefixes=/config-server
   workflow-engine:
     image: ghcr.io/fabcelhaft/camunda-config-server-ready:main
     restart: unless-stopped
@@ -33,8 +76,13 @@ services:
       SPRING_CLOUD_CONFIG_URI: http://config-server:8080
       SPRING_PROFILES_ACTIVE: config-server
       JAVA_OPTS: -Xmx256m -XX:MaxMetaspaceSize=256m -XX:-UseContainerSupport
-    ports:
-      - 8042:8080
+    labels:
+      - service=${TRAEFIK_INDENT}
+      - traefik.enable=true
+      - "traefik.http.routers.camunda.rule=PathPrefix(`/camunda/app/`) || PathPrefix(`/camunda-rest`)" #Login: /camunda/app/welcome/default/
+      - traefik.http.routers.camunda.entrypoints=web
+      - traefik.http.routers.camunda.middlewares=camunda-stripprefix
+      - traefik.http.middlewares.camunda-stripprefix.stripprefix.prefixes=/camunda-rest
     depends_on:
       - config-server
       - db
