@@ -26,6 +26,28 @@ services:
       - ${POSTGRES_PORT}:5432
       - ${SSH_PORT}:2222
       #services einbinden, grafana hinzufügen
+  grafana:
+    image: grafana/grafana:main
+    restart: unless-stopped
+    volumes:
+          - "./docker-compose/grafana/provisioning/:/etc/grafana/provisioning/:ro"
+          - "grafana_data:/var/lib/grafana"
+    environment: 
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/grafana"
+    user: "104"
+    labels:
+      - service=${TRAEFIK_INDENT}
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=PathPrefix(`/grafana`)"
+      - "traefik.http.routers.grafana.entrypoints=web"
+      - "traefik.http.routers.grafana.middlewares=grafana-stripprefix"
+      - "traefik.http.middlewares.grafana-stripprefix.stripprefix.prefixes=/grafana"
+    depends_on:
+      - db
+      - loadbalancer
   sftp:
     image: lscr.io/linuxserver/openssh-server
     restart: unless-stopped
@@ -79,10 +101,8 @@ services:
     labels:
       - service=${TRAEFIK_INDENT}
       - traefik.enable=true
-      - "traefik.http.routers.camunda.rule=PathPrefix(`/camunda/app/`) || PathPrefix(`/camunda-rest`)" #Login: /camunda/app/welcome/default/
+      - "traefik.http.routers.camunda.rule=PathPrefix(`/camunda`) || PathPrefix(`/engine-rest`)" #Login: /camunda/app/welcome/default/
       - traefik.http.routers.camunda.entrypoints=web
-      - traefik.http.routers.camunda.middlewares=camunda-stripprefix
-      - traefik.http.middlewares.camunda-stripprefix.stripprefix.prefixes=/camunda-rest
     depends_on:
       - config-server
       - db
@@ -163,3 +183,4 @@ volumes:
   config: {} # Configuration
   db: {}
   alexandriadata: {} # Shared storage for analyzing services
+  grafana_data: {}
