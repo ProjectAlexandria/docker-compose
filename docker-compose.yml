@@ -55,7 +55,7 @@ services:
       - PASSWORD_ACCESS=true
       - SUDO_ACCESS=false
       - USER_NAME=alexandria
-      - USER_PASSWORD=alexandria
+      - USER_PASSWORD=${SFTP_PASSWORD}
     volumes:
       - "alexandriadata:/alexandriadata"
     labels:
@@ -106,6 +106,7 @@ services:
     depends_on:
       - config-server
       - db
+      - loadbalancer
   filesystem-initiator:
     image: ghcr.io/projectalexandria/filesystem-initiator:main
     restart: unless-stopped
@@ -115,6 +116,30 @@ services:
     volumes:
       - "alexandriadata:/alexandriadata"
       - "C:/Users/info/git/projectAlexandria:/projects:ro"
+    depends_on:
+      - config-server
+      - db
+      - workflow-engine
+  github-initiator:
+    image: ghcr.io/projectalexandria/github-initiator:main
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8080
+      SPRING_PROFILES_ACTIVE: config-server
+    volumes:
+      - "alexandriadata:/alexandriadata"
+    depends_on:
+      - config-server
+      - db
+      - workflow-engine
+  gitlab-initiator:
+    image: ghcr.io/projectalexandria/gitlab-initiator:main
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8080
+      SPRING_PROFILES_ACTIVE: config-server
+    volumes:
+      - "alexandriadata:/alexandriadata"
     depends_on:
       - config-server
       - db
@@ -162,6 +187,34 @@ services:
     environment:
       SPRING_CLOUD_CONFIG_URI: http://config-server:8080
       SPRING_PROFILES_ACTIVE: config-server
+    depends_on:
+      - config-server
+      - db
+      - workflow-engine
+  npm-analyzer:
+    image: ghcr.io/projectalexandria/npm-analyzer:main
+    restart: unless-stopped
+    deploy: 
+      replicas: 1
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8080
+      SPRING_PROFILES_ACTIVE: config-server
+    volumes:
+      - "alexandriadata:/alexandriadata"
+    depends_on:
+      - config-server
+      - db
+      - workflow-engine
+  npm-license:
+    image: ghcr.io/projectalexandria/npm-license:main
+    restart: unless-stopped
+    deploy: 
+      replicas: 3
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8080
+      SPRING_PROFILES_ACTIVE: config-server
+    volumes:
+      - "alexandriadata:/alexandriadata"
     depends_on:
       - config-server
       - db
