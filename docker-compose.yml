@@ -25,7 +25,6 @@ services:
       - ${HTTP_PORT}:8080
       - ${POSTGRES_PORT}:5432
       - ${SSH_PORT}:2222
-      #services einbinden, grafana hinzufügen
   grafana:
     image: grafana/grafana:main
     restart: unless-stopped
@@ -66,9 +65,9 @@ services:
       - traefik.tcp.routers.sftp.service=sftp
       - traefik.tcp.services.sftp.loadbalancer.server.port=2222
   db:
-    image: postgres:14.1
+    image: postgres:14.0
     restart: unless-stopped
-    command: postgres -c 'max_connections=1000'
+    # command: postgres -c 'max_connections=100'
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
@@ -101,19 +100,19 @@ services:
       - config-server
       - db
       - loadbalancer
-  # filesystem-initiator:
-  #   image: ghcr.io/projectalexandria/filesystem-initiator:main
-  #   restart: unless-stopped
-  #   environment:
-  #     SPRING_CLOUD_CONFIG_URI: http://config-server:8080
-  #     SPRING_PROFILES_ACTIVE: config-server
-  #   volumes:
-  #     - "alexandriadata:/alexandriadata"
-  #     - "C:/Users/info/git/projectAlexandria:/projects:ro"
-  #   depends_on:
-  #     - config-server
-  #     - db
-  #     - workflow-engine
+  filesystem-initiator:
+    image: ghcr.io/projectalexandria/filesystem-initiator:main
+    restart: unless-stopped
+    environment:
+      SPRING_CLOUD_CONFIG_URI: http://config-server:8080
+      SPRING_PROFILES_ACTIVE: config-server
+    volumes:
+      - "alexandriadata:/alexandriadata"
+      - "C:/Users/info/git/projectAlexandria:/projects:ro"
+    depends_on:
+      - config-server
+      - db
+      - workflow-engine
   github-initiator:
     image: ghcr.io/projectalexandria/github-initiator:main
     restart: unless-stopped
@@ -203,7 +202,7 @@ services:
     image: ghcr.io/projectalexandria/npm-license:main
     restart: unless-stopped
     deploy: 
-      replicas: 3
+      replicas: 2
     environment:
       SPRING_CLOUD_CONFIG_URI: http://config-server:8080
       SPRING_PROFILES_ACTIVE: config-server
